@@ -1,0 +1,25 @@
+# Eclipse metadata
+.project
+.settings/
+
+# Maven build output
+target/
+
+# Artifacts
+*.jar
+*.war
+*.zip
+
+# Intellij project files
+.idea/
+*.iml
+
+# Gradle build output
+build/
+
+# Log files
+*.log
+
+# OS generated files
+.DS_Store
+Thumbs.db
