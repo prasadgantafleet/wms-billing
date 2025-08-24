@@ -37,31 +37,7 @@ You can change the port via standard Spring Boot configuration (e.g., `server.po
 
 ### Contracts (classpath YAML)
 
-Place contract definition files in:
-```text
-src/main/resources/contracts/
-```
 
-These are loaded from the classpath pattern:
-```text
-classpath*:contracts/*.yaml
-```
-
-Each contract must define an ID and customer reference, plus any warehouse-specific charge configuration. If a contract is not found for a requested ID, invoice endpoints will return HTTP 400.
-
-Example skeleton:
-```yaml
-contracts:
-  - contractId: 1001
-    customerId: CUST-001
-    warehouses:
-      - warehouseId: WH001
-        charges:
-          - category: STORAGE
-            type: STORAGE_PALLET
-            rate: 2.50
-            unit: PALLET
-```
 
 ### Invoice templates (JasperReports)
 
