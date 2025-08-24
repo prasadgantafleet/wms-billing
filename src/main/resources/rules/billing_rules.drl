@@ -1,153 +1,204 @@
 package com.wms.billing.rules
 
 import com.wms.billing.domain.Activity;
-import com.wms.billing.domain.Charge;
 import com.wms.billing.domain.InvoiceLine;
-import com.wms.billing.domain.Contract;
+import com.wms.billing.domain.RateSheet;
+import com.wms.billing.domain.Warehouse;
 import com.wms.billing.domain.WarehouseCharges;
-import com.wms.billing.domain.ChargeCategory;
+import com.wms.billing.dto.ChargeCategory;
 import java.math.BigDecimal;
-import java.util.List;
 
+// Global collection provided by the service
 global java.util.List invoiceLines;
 
-// Rule for Storage (Warehouse Specific)
-rule "Calculate Storage Charges"
+// =========================
+// Debug helpers (high salience)
+// =========================
+rule "DEBUG - Activities inserted"
+salience 1000
 when
-    $activity : Activity($type: type, $qty: quantity, $wh: warehouseId, $cat: category)
-    eval($type != null && $type.equals("PER_PALLET_PER_DAY" ))
-    $contract : Contract()
-    $wc       : WarehouseCharges(warehouseId == $wh) from $contract.warehouses
-    $charge   : Charge(category == ChargeCategory.STORAGE,type== "PER_PALLET_PER_DAY") from $wc.charges
-    eval($cat != null && $cat.equalsIgnoreCase("STORAGE"))
+    $a : Activity()
 then
-    BigDecimal amount = $charge.getRate().multiply($activity.getQuantity());
-    $activity.setAmount(amount);
-      InvoiceLine l = new InvoiceLine();
-       l.setDescription("Storage - " + $charge.getType());
-       l.setQuantity($activity.getQuantity());
-       l.setRate($charge.getRate());
-       l.setAmount(amount);
-       invoiceLines.add(l);
+    System.out.println("[DEBUG] Activity: wh=" + $a.getWarehouseId()
+        + ", type=" + $a.getType()
+        + ", category=" + $a.getCategory()
+        + " (" + ($a.getCategory() == null ? "null" : $a.getCategory().getClass().getName()) + ")"
+        + ", qty=" + $a.getQuantity()
+        + ", amount=" + $a.getAmount());
 end
 
-
-// Rule for Storage (Warehouse Specific)
-rule "Calculate Inbound Charges"
+rule "DEBUG - Warehouses under RateSheet"
+salience 999
 when
-    $activity : Activity($type: type, $qty: quantity, $wh: warehouseId, $cat: category)
-    eval($type != null && $type.equals("PER_PALLET_PER_DAY" ))
-    $contract : Contract()
-    $wc       : WarehouseCharges(warehouseId == $wh) from $contract.warehouses
-    $charge   : Charge(category == ChargeCategory.INBOUND,type== "PER_PALLET_PER_DAY") from $wc.charges
-    eval($cat != null && $cat.equalsIgnoreCase("INBOUND"))
+    $rs : RateSheet()
 then
-    BigDecimal amount = $charge.getRate().multiply($activity.getQuantity());
-    $activity.setAmount(amount);
-      InvoiceLine l = new InvoiceLine();
-       l.setDescription("Inbound - " + $charge.getType());
-       l.setQuantity($activity.getQuantity());
-       l.setRate($charge.getRate());
-       l.setAmount(amount);
-       invoiceLines.add(l);
+    System.out.println("[DEBUG] RateSheet seen. Warehouses count="
+        + ($rs.getWarehouses() == null ? 0 : $rs.getWarehouses().size()));
 end
 
-//// Storage per pallet per day
-//rule "Per Pallet Per Day"
-//when
-//    $a: Activity(type == "PER_PALLET_PER_DAY")
-//    $c: Charge(type == "PER_PALLET_PER_DAY")
-//then
-//    InvoiceLine l = new InvoiceLine();
-//    l.setDescription("Storage - Pallet/Day");
-//    l.setQuantity($a.getQuantity());
-//    l.setRate($c.getRate());
-//    l.setAmount($a.getQuantity().multiply($c.getRate()));
-//    invoiceLines.add(l);
-//end
+rule "DEBUG - Warehouses and Charges visible"
+salience 998
+when
+    $rs : RateSheet()
+    $w  : Warehouse( $whId: warehouseId ) from $rs.warehouses
+then
+    int chargesCount = ($w.getCharges() == null ? 0 : $w.getCharges().size());
+    System.out.println("[DEBUG] Warehouse: whId=" + $whId + ", chargesCount=" + chargesCount);
+end
 
-//// Per shipment
-//rule "Per Shipment"
-//when
-//    $a: Activity(type == "PER_SHIPMENT")
-//    $c: Charge(type == "PER_SHIPMENT")
-//then
-//    InvoiceLine l = new InvoiceLine();
-//    l.setDescription("Shipment");
-//    l.setQuantity($a.getQuantity());
-//    l.setRate($c.getRate());
-//    l.setAmount($a.getQuantity().multiply($c.getRate()));
-//    invoiceLines.add(l);
-//end
-//
-//// Picking
-//rule "Picking"
-//when
-//    $a: Activity(type == "PICKING")
-//    $c: Charge(type == "PICKING")
-//then
-//    InvoiceLine l = new InvoiceLine();
-//    l.setDescription("Picking");
-//    l.setQuantity($a.getQuantity());
-//    l.setRate($c.getRate());
-//    l.setAmount($a.getQuantity().multiply($c.getRate()));
-//    invoiceLines.add(l);
-//end
-//
-//// Packing
-//rule "Packing"
-//when
-//    $a: Activity(type == "PACKING")
-//    $c: Charge(type == "PACKING")
-//then
-//    InvoiceLine l = new InvoiceLine();
-//    l.setDescription("Packing");
-//    l.setQuantity($a.getQuantity());
-//    l.setRate($c.getRate());
-//    l.setAmount($a.getQuantity().multiply($c.getRate()));
-//    invoiceLines.add(l);
-//end
-//
-//// Shrinkage
-//rule "Shrinkage"
-//when
-//    $a: Activity(type == "SHRINKAGE")
-//    $c: Charge(type == "SHRINKAGE")
-//then
-//    InvoiceLine l = new InvoiceLine();
-//    l.setDescription("Shrinkage");
-//    l.setQuantity($a.getQuantity());
-//    l.setRate($c.getRate());
-//    l.setAmount($a.getQuantity().multiply($c.getRate()));
-//    invoiceLines.add(l);
-//end
-//
-//// Overtime / Weekend
-//rule "Overtime"
-//when
-//    $a: Activity(type == "OVERTIME")
-//    $c: Charge(type == "OVERTIME")
-//then
-//    InvoiceLine l = new InvoiceLine();
-//    l.setDescription("Overtime");
-//    l.setQuantity($a.getQuantity());
-//    l.setRate($c.getRate());
-//    l.setAmount($a.getQuantity().multiply($c.getRate()));
-//    invoiceLines.add(l);
-//end
-//
-//rule "Tiered Storage Discount"
-//when
-//    // Bind quantity to $qty and avoid referencing $a inside the same pattern constraint
-//    $a: Activity(type == "PER_PALLET_PER_DAY", $qty: quantity)
-//    eval($qty.compareTo(new java.math.BigDecimal("100")) > 0)
-//    $c: Charge(type == "PER_PALLET_PER_DAY")
-//then
-//    InvoiceLine l = new InvoiceLine();
-//    java.math.BigDecimal discountRate = $c.getRate().multiply(new java.math.BigDecimal("0.90")); // 10% discount
-//    l.setDescription("Storage - Tiered Discount");
-//    l.setQuantity($qty);
-//    l.setRate(discountRate);
-//    l.setAmount($qty.multiply(discountRate));
-//    invoiceLines.add(l);
-//end
+rule "DEBUG - Each Charge detail"
+salience 997
+when
+    $rs : RateSheet()
+    $w  : Warehouse( $whId: warehouseId ) from $rs.warehouses
+    $c  : WarehouseCharges() from $w.charges
+then
+    System.out.println("[DEBUG] Charge: whId=" + $whId
+        + ", category=" + $c.getCategory()
+        + " (" + ($c.getCategory() == null ? "null" : $c.getCategory().getClass().getName()) + ")"
+        + ", type=" + $c.getType()
+        + ", rate=" + $c.getRate()
+        + ", unit=" + $c.getUnit());
+end
+
+// =========================
+// Billing Rules
+// =========================
+
+// Storage - Per Pallet Per Day
+rule "Calculate Storage - Per Pallet Per Day"
+when
+    $a  : Activity(
+            type == "PER_PALLET_PER_DAY",
+            category == ChargeCategory.STORAGE,
+            $qty: quantity != null,
+            $wh: warehouseId
+         )
+    $rs : RateSheet()
+    $w  : Warehouse( warehouseId == $wh ) from $rs.warehouses
+    $c  : WarehouseCharges(
+            category == ChargeCategory.STORAGE,
+            type == "PER_PALLET_PER_DAY",
+            rate != null
+         ) from $w.charges
+then
+    BigDecimal rate = ($c.getRate() instanceof BigDecimal)
+        ? (BigDecimal)$c.getRate()
+        : BigDecimal.valueOf(((Number)$c.getRate()).doubleValue());
+    BigDecimal qty = ($qty instanceof BigDecimal)
+        ? (BigDecimal)$qty
+        : BigDecimal.valueOf(((Number)$qty).doubleValue());
+
+    BigDecimal amount = rate.multiply(qty);
+    $a.setAmount(amount);
+
+    InvoiceLine l = new InvoiceLine();
+    l.setDescription("Storage - " + $c.getType());
+    l.setQuantity(qty);
+    l.setRate(rate);
+    l.setAmount(amount);
+    invoiceLines.add(l);
+
+    System.out.println("[DEBUG] Fired: Calculate Storage - Per Pallet Per Day. wh=" + $wh
+        + ", qty=" + qty + ", rate=" + rate + ", amount=" + amount);
+end
+
+// Inbound - Per Pallet Per Day
+rule "Calculate Inbound - Per Pallet Per Day"
+when
+    $a  : Activity(
+            type == "PER_PALLET_PER_DAY",
+            category == ChargeCategory.INBOUND,
+            $qty: quantity != null,
+            $wh: warehouseId
+         )
+    $rs : RateSheet()
+    $w  : Warehouse( warehouseId == $wh ) from $rs.warehouses
+    $c  : WarehouseCharges(
+            category == ChargeCategory.INBOUND,
+            type == "PER_PALLET_PER_DAY",
+            rate != null
+         ) from $w.charges
+then
+    BigDecimal rate = ($c.getRate() instanceof BigDecimal)
+        ? (BigDecimal)$c.getRate()
+        : BigDecimal.valueOf(((Number)$c.getRate()).doubleValue());
+    BigDecimal qty = ($qty instanceof BigDecimal)
+        ? (BigDecimal)$qty
+        : BigDecimal.valueOf(((Number)$qty).doubleValue());
+
+    BigDecimal amount = rate.multiply(qty);
+    $a.setAmount(amount);
+
+    InvoiceLine l = new InvoiceLine();
+    l.setDescription("Inbound - " + $c.getType());
+    l.setQuantity(qty);
+    l.setRate(rate);
+    l.setAmount(amount);
+    invoiceLines.add(l);
+
+    System.out.println("[DEBUG] Fired: Calculate Inbound - Per Pallet Per Day. wh=" + $wh
+        + ", qty=" + qty + ", rate=" + rate + ", amount=" + amount);
+end
+
+// Inbound - Per Shipment
+rule "Calculate Inbound - Per Shipment"
+when
+    $a  : Activity(
+            type == "PER_SHIPMENT",
+            category == ChargeCategory.INBOUND,
+            $qty: quantity != null,
+            $wh: warehouseId
+         )
+    $rs : RateSheet()
+    $w  : Warehouse( warehouseId == $wh ) from $rs.warehouses
+    $c  : WarehouseCharges(
+            category == ChargeCategory.INBOUND,
+            type == "PER_SHIPMENT",
+            rate != null
+         ) from $w.charges
+then
+    BigDecimal rate = ($c.getRate() instanceof BigDecimal)
+        ? (BigDecimal)$c.getRate()
+        : BigDecimal.valueOf(((Number)$c.getRate()).doubleValue());
+    BigDecimal qty = ($qty instanceof BigDecimal)
+        ? (BigDecimal)$qty
+        : BigDecimal.valueOf(((Number)$qty).doubleValue());
+
+    BigDecimal amount = rate.multiply(qty);
+    $a.setAmount(amount);
+
+    InvoiceLine l = new InvoiceLine();
+    l.setDescription("Inbound - " + $c.getType());
+    l.setQuantity(qty);
+    l.setRate(rate);
+    l.setAmount(amount);
+    invoiceLines.add(l);
+
+    System.out.println("[DEBUG] Fired: Calculate Inbound - Per Shipment. wh=" + $wh
+        + ", qty=" + qty + ", rate=" + rate + ", amount=" + amount);
+end
+
+// =========================
+// Additional diagnostics for common mismatches
+// =========================
+rule "DEBUG - No warehouse match for activity"
+salience -1
+when
+    $a  : Activity( $wh: warehouseId )
+    $rs : RateSheet()
+    not( Warehouse( warehouseId == $wh ) from $rs.warehouses )
+then
+    System.out.println("[DEBUG][WARN] No Warehouse match for Activity.warehouseId=" + $wh);
+end
+
+rule "DEBUG - Warehouse has no charges for type"
+salience -2
+when
+    $a  : Activity( $wh: warehouseId, $type: type )
+    $rs : RateSheet()
+    $w  : Warehouse( warehouseId == $wh ) from $rs.warehouses
+    not( WarehouseCharges( type == $type ) from $w.charges )
+then
+    System.out.println("[DEBUG][WARN] Warehouse " + $wh + " has no charges with type=" + $type);
+end

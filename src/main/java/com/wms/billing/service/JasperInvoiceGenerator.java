@@ -128,7 +128,7 @@ public class JasperInvoiceGenerator {
         params.put("PERIOD_END", invoice.getPeriodEnd().toString());
         params.put("TOTAL_AMOUNT", invoice.getTotalAmount());
 
-        List<?> lines = (invoice.getLines() == null) ? List.of() : invoice.getLines();
+        List<?> lines = (invoice.getInvoiceLines() == null) ? List.of() : invoice.getInvoiceLines();
         JRBeanCollectionDataSource ds = new JRBeanCollectionDataSource(lines);
         JasperPrint jasperPrint = JasperFillManager.fillReport(jasperReport, params, ds);
 

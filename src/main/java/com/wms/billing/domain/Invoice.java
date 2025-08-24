@@ -14,7 +14,7 @@ public class Invoice {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    private Long contractId;
+    private Long rateSheetId;
     private String customerId;
     private String warehouseId;
     private LocalDate periodStart;
@@ -23,5 +23,5 @@ public class Invoice {
     private String status; // PREVIEW, FINAL
 
     @OneToMany(cascade = CascadeType.ALL, fetch = FetchType.EAGER)
-    private List<InvoiceLine> lines;
+    private List<InvoiceLine> invoiceLines;
 }

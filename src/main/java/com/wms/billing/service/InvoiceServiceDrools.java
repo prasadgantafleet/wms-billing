@@ -2,11 +2,14 @@ package com.wms.billing.service;
 
 import com.wms.billing.domain.*;
 import com.wms.billing.repository.InvoiceRepository;
+import com.wms.billing.repository.RateSheetRepository;
 import lombok.RequiredArgsConstructor;
 import org.kie.api.runtime.KieContainer;
 import org.kie.api.runtime.KieSession;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
+import org.springframework.web.server.ResponseStatusException;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
@@ -35,7 +38,7 @@ import java.util.List;
 public class InvoiceServiceDrools {
 
     @Autowired
-    private ContractYamlLoader contractLoader;
+    private RateSheetRepository rateSheetRepository;
 
     @Autowired
     private InvoiceRepository invoiceRepo;
@@ -46,54 +49,70 @@ public class InvoiceServiceDrools {
     /**
      * Generates an invoice from provided activities and contract configuration within a period.
      *
-     *
-     * @param contractId contract identifier
+     * @param rateSheetId contract identifier
      * @param warehouseId warehouse where activities occurred
      * @param start billing period start date (inclusive)
      * @param end billing period end date (inclusive)
      * @param activities list of activities to bill
      * @param preview whether to only preview (true) or persist the final invoice (false)
      * @return built {@link Invoice} including computed lines and total
-     * @throws RuntimeException if the contract cannot be found
      */
-    public Invoice generateInvoice(Long contractId, String warehouseId,
-                                   LocalDate start, LocalDate end, List<Activity> activities,
+    public Invoice generateInvoice(Long rateSheetId,
+                                   String warehouseId,
+                                   LocalDate start,
+                                   LocalDate end,
+                                   List<Activity> activities,
                                    boolean preview) {
 
-        Contract contract = contractLoader.getContract(contractId);
-        if (contract == null) throw new RuntimeException("Contract not found: " + contractId);
+        RateSheet rateSheet = rateSheetRepository.getRateSheetByRateSheetId(rateSheetId);
 
-        List<Charge> charges = resolveCharges(contract, warehouseId);
+        if (rateSheet == null) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "rateSheetId not found: " + rateSheetId);
+        }
+
+        // Ensure lazy associations are initialized before Drools traverses them
+        List<Warehouse> warehouses = rateSheet.getWarehouses();
+        if (warehouses != null) {
+            warehouses.size(); // initialize warehouses
+            warehouses.forEach(w -> {
+                if (w.getCharges() != null) {
+                    w.getCharges().size(); // initialize charges
+                }
+            });
+        }
 
         Invoice invoice = new Invoice();
-        invoice.setCustomerId(contract.getCustomerId());
-        invoice.setContractId(contractId);
+        invoice.setCustomerId(rateSheet.getCustomerId());
+        invoice.setRateSheetId(rateSheetId);
         invoice.setWarehouseId(warehouseId);
         invoice.setPeriodStart(start);
         invoice.setPeriodEnd(end);
         invoice.setStatus(preview ? "PREVIEW" : "FINAL");
 
+        // Prepare Drools session
         KieSession kieSession = kieContainer.newKieSession("billingKS");
         List<InvoiceLine> invoiceLines = new ArrayList<>();
         kieSession.setGlobal("invoiceLines", invoiceLines);
 
-        // insert domain objects into KIE session
-        kieSession.insert(contract);
+        // Insert only the aggregate root and activities. Rules will traverse nested collections.
+        kieSession.insert(rateSheet);
+        kieSession.insert(warehouses);
         activities.forEach(kieSession::insert);
-        charges.forEach(kieSession::insert);
-
         kieSession.fireAllRules();
         kieSession.dispose();
 
-        invoice.setLines(invoiceLines);
+        invoice.setInvoiceLines(invoiceLines);
         BigDecimal total = invoiceLines.stream()
                 .map(InvoiceLine::getAmount)
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
         invoice.setTotalAmount(total);
 
-        if (!preview) invoiceRepo.save(invoice);
+        if (!preview) {
+            invoiceRepo.save(invoice);
+        }
         return invoice;
     }
+
 
     /**
      * Resolves the list of charges applicable to a given warehouse under the provided contract.
@@ -102,8 +121,8 @@ public class InvoiceServiceDrools {
      * @param warehouseId the target warehouse identifier
      * @return the list of charges for the warehouse, or an empty list if not found
      */
-    private List<Charge> resolveCharges(
-            com.wms.billing.domain.Contract contract,
+    private List<WarehouseCharges> resolveCharges(
+            RateSheet contract,
             String warehouseId
     ) {
         if (contract == null || contract.getWarehouses() == null || warehouseId == null) {
@@ -112,7 +131,7 @@ public class InvoiceServiceDrools {
         return contract.getWarehouses().stream()
                 .filter(wc -> warehouseId.equals(wc.getWarehouseId()))
                 .findFirst()
-                .map(com.wms.billing.domain.WarehouseCharges::getCharges)
+                .map(com.wms.billing.domain.Warehouse::getCharges)
                 .orElse(java.util.List.of());
     }
 }

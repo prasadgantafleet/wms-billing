@@ -3,6 +3,7 @@ import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.ConstraintViolation;
 import jakarta.validation.ConstraintViolationException;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
@@ -95,6 +96,15 @@ public class GlobalExceptionHandler {
         return build(HttpStatus.INTERNAL_SERVER_ERROR, "Unexpected server error", req, List.of(nonNullMessage(ex)));
     }
 
+
+    @ExceptionHandler(RateSheetNotFoundException.class)
+    public ResponseEntity<ErrorResponse> handleRateSheetNotFound(RateSheetNotFoundException ex,
+                                                                 HttpServletRequest req) {
+        log.debug("RateSheet not found: {}", ex.getMessage());
+        return build(HttpStatus.NOT_FOUND, nonNullMessage(ex), req, null);
+    }
+
+
     private ResponseEntity<ErrorResponse> build(HttpStatus status,
                                                 String message,
                                                 HttpServletRequest req,
@@ -109,6 +119,18 @@ public class GlobalExceptionHandler {
         );
         return ResponseEntity.status(status).body(body);
     }
+
+
+    @ExceptionHandler(DataIntegrityViolationException.class)
+    public ResponseEntity<ErrorResponse> handleDataIntegrity(DataIntegrityViolationException ex,
+                                                             HttpServletRequest req) {
+        String cause = ex.getMostSpecificCause() != null
+                ? ex.getMostSpecificCause().getMessage()
+                : ex.getMessage();
+        log.debug("Data integrity violation: {}", cause);
+        return build(HttpStatus.BAD_REQUEST, "Data integrity violation", req, java.util.List.of(cause));
+    }
+
 
     private String formatFieldError(FieldError fe) {
         String field = fe.getField();
